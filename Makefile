@@ -15,4 +15,8 @@ $(CLIENT): dbs-client.c
 clean:
 	rm -f $(SERVER) $(CLIENT)
 
-.PHONY: all clean
+commit:
+	git add dbs-client.c dbs-server.c Makefile .gitignore
+	git commit -m "Commit"
+
+.PHONY: all clean commit
