@@ -43,16 +43,6 @@ void handle_client(int, const char *);
 
 void broadcast(const char *, const char *);
 
-/*void sigchld_handler(int s) {
-  (void) s;
-
-  int saved_errno = errno;
-
-  while (waitpid(-1, NULL, WNOHANG) > 0);
-
-  errno = saved_errno;
-}*/
-
 void *get_in_addr(struct sockaddr *sa) {
   if (sa->sa_family == AF_INET)
     return &(((struct sockaddr_in *) sa)->sin_addr);
@@ -132,7 +122,6 @@ int client_add(int fd) {
 
 void client_remove(int idx) {
   pthread_mutex_lock(&mutex_lock);
-  //int fd = client_fds[idx];
   client_fds[idx] = -1;
   pthread_mutex_unlock(&mutex_lock);
 }

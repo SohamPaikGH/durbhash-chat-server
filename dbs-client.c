@@ -31,10 +31,6 @@ void *get_in_addr(struct sockaddr *sa) {
   return &(((struct sockaddr_in6 *) sa)->sin6_addr);
 }
 
-void *handle_send_thread(void *);
-
-void *handle_recv_thread(void *);
-
 void *handle_send_thread(void *arg) {
   int sockfd = (intptr_t) arg;
   char msg[MAXDATASIZE];
@@ -115,7 +111,7 @@ int main(int argc, char *argv[]) {
   char s[INET6_ADDRSTRLEN];
 
   if (argc != 2) {
-    fprintf(stderr, "usage: hello-client hostname\n");
+    fprintf(stderr, "usage: dbs-client hostname\n");
     exit(1);
   }
 
