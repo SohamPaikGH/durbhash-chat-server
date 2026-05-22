@@ -21,7 +21,7 @@
 #include <unistd.h>
 
 #define PORT "50000"
-#define BACKLOG 10
+#define BACKLOG 2
 #define BUF_SIZE 1024
 
 pthread_mutex_t mutex_lock;
@@ -130,6 +130,7 @@ void *client_thread(void *arg) {
   client_info *c = (client_info *) arg;
   int idx = client_add(c->fd);
   if (idx == -1) {
+    fprintf(stdout, "Server full.\n");
     send(c->fd, "Server full.", 12, 0);
     shutdown(c->fd, SHUT_RDWR);
     close(c->fd);
