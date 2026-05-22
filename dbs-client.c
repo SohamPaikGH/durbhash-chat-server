@@ -150,6 +150,9 @@ int main(int argc, char *argv[]) {
 
   freeaddrinfo(res);
 
+  /* Clears terminal window */
+  fprintf(stdout, "\e[1;1H\e[2J");
+
   pthread_t send_thread, recv_thread;
   void *arg = (void *) (intptr_t) sockfd;
   if (pthread_create(&send_thread, NULL, handle_send_thread, arg)) {
