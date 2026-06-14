@@ -25,6 +25,7 @@
 #define BACKLOG 2
 #define BUF_SIZE 1024
 #define POOL_SIZE 5
+#define NAMESIZE 32
 #define TIMEOUT 1000
 
 pthread_mutex_t mutex_lock;
@@ -97,15 +98,15 @@ void pool_client_remove(int fd) {
   pthread_mutex_unlock(&pool_clients_lock);
 }
 
-void pool_broadcast(int sender_fd, const char *sender_name, const char *msg) {
+void pool_broadcast(/*int sender_fd, */const char *sender_name, const char *msg) {
   char buf[BUF_SIZE];
   snprintf(buf, sizeof(buf), "[%s] says '%s'\n", sender_name, msg);
 
   pthread_mutex_lock(&pool_clients_lock);
   for (int i = 0; i < POOL_SIZE * BACKLOG; i++) {
-    if (pool_clients[i] != sender_fd) {
+    //if (pool_clients[i] != sender_fd) {
       send(pool_clients[i], buf, strlen(buf), MSG_DONTWAIT);
-    }
+    //}
   }
   pthread_mutex_unlock(&pool_clients_lock);
 }
@@ -258,62 +259,132 @@ void *client_thread(void *arg) {
 /* ----------- POOL MODE: WORKER THREAD ----------- */
 
 void *pool_thread(void *arg) {
-  //client_info_pool_mode *c = (client_info_pool_mode *) arg;
-  int maxfds = 100;
-  struct pollfd *fds = (struct pollfd *) malloc(sizeof(struct pollfd) * maxfds);
-  char **names = (char **) malloc(INET6_ADDRSTRLEN * maxfds);
-  int nfds = 0, ret;
+  Worker *w = (Worker *) arg;
 
-  int sockfd = -1;
-  struct sockaddr_storage client_addr;
-  socklen_t addr_size = sizeof(client_addr);
-  char s[INET6_ADDRSTRLEN] = {0};
+  int maxfds = BACKLOG;
+  struct pollfd *fds = malloc(sizeof(struct pollfd) * maxfds);
+  char **names = malloc(sizeof(char *) * maxfds);
+  int nfds = 0;
 
-  sockfd = (int) (intptr_t) arg;
-  printf("sockfd: %d\n", sockfd);
+
+  for (int i = 0; i < maxfds; i++) {
+    fds[i].fd = -1;
+    names[i] = NULL;
+  }
+
+  printf("Worker %d started\n", w->id);
 
   while (1) {
-    int clientfd = accept(sockfd, (struct sockaddr *) &client_addr, &addr_size);
-    if (clientfd == -1) {
-      perror("accept");
+    int new_fd;
+
+    while ((new_fd = queue_pop(&w->queue)) != -1) {
+      if (nfds == maxfds) {
+        maxfds *= 2;
+        fds = realloc(fds, sizeof(struct pollfd) * maxfds);
+        names = realloc(names, sizeof(char *) * maxfds);
+      }
+
+      fds[nfds].fd = new_fd;
+      fds[nfds].events = POLLIN;
+      fds[nfds].revents = 0;
+      names[nfds] = NULL;
+      nfds++;
+
+      pool_client_add(new_fd);
+      printf("Worker %d: added client fd=%d\n", w->id, new_fd);
+
+      send(new_fd, "Enter your name:\n", 17, 0);
+    }
+
+    if (nfds == 0) {
+      pthread_mutex_lock(&w->queue.lock);
+      while (w->queue.count == 0) {
+        pthread_cond_wait(&w->queue.cond, &w->queue.lock);
+      }
+      pthread_mutex_unlock(&w->queue.lock);
       continue;
     }
 
-    inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *) &client_addr), s, sizeof(s));
-    printf("Server got connection from %s\n", s);
-    fflush(stdout);
-
-    if (nfds == maxfds) {
-      maxfds = maxfds * 2;
-      fds = realloc(fds, sizeof(struct pollfd) * maxfds);
-      names = realloc(names, INET6_ADDRSTRLEN * maxfds * 2);
-    }
-
-    struct pollfd new_entry = {clientfd, POLLIN, 0};
-    fds[nfds] = new_entry;
-    names[nfds] = strdup(s);
-    nfds++;
-
-    ret = poll(fds, nfds, TIMEOUT);
-    if (ret < 0) {
+    int ready = poll(fds, nfds, TIMEOUT);
+    if (ready < 0) {
+      if (errno == EINTR) continue;
       perror("poll");
-      exit(EXIT_FAILURE);
+      continue;
     }
 
-    for (int i = 0; i < nfds; i++) {
-      if (fds[i].revents & POLLIN) {
-        handle_client(fds[i].fd, names[i]);
+    for (int i = 0; i < nfds && ready; i++) {
+      if (!(fds[i].revents & POLLIN)) continue;
+      ready--;
+
+      char buf[BUF_SIZE] = {0};
+      ssize_t n = recv(fds[i].fd, buf, sizeof(buf) - 1, 0);
+
+      if (n <= 0) {
+        if (n == 0)
+          printf("Worker %d: fd=%d disconnected\n", w->id, fds[i].fd);
+        else
+          perror("recv");
+
+        pool_client_remove(fds[i].fd);
+        shutdown(fds[i].fd, SHUT_RDWR);
+        close(fds[i].fd);
+        free(names[i]);
+
+        fds[i] = fds[nfds - 1];
+        names[i] = names[nfds - 1];
+        fds[nfds - 1].fd = -1;
+        names[nfds - 1] = NULL;
+        nfds--;
+        i--;
+        continue;
       }
+
+      buf[strcspn(buf, "\r\n")] = 0;
+      if (buf[0] == 0) continue;
+
+      if (!names[i]) {
+        names[i] = strdup(buf);
+        char welcome[BUF_SIZE];
+        snprintf(welcome, sizeof(welcome), "Welcome, %s!\n", buf);
+        send(fds[i].fd, welcome, sizeof(welcome), 0);
+        printf("Worker %d: fd=%d registered as '%s'\n", w->id, fds[i].fd, buf);
+        continue;
+      }
+
+      if (!strncmp(buf, "quit", 4)) {
+        send(fds[i].fd, "Goodbye!\n", 9, 0);
+        printf("Worker %d: '%s' quit\n", w->id, names[i]);
+
+        pool_client_remove(fds[i].fd);
+        shutdown(fds[i].fd, SHUT_RDWR);
+        close(fds[i].fd);
+        free(names[i]);
+
+        fds[i] = fds[nfds - 1];
+        names[i] = names[nfds - 1];
+        fds[nfds - 1].fd = -1;
+        names[nfds - 1] = NULL;
+        nfds--;
+        i--;
+        continue;
+      }
+
+
+      printf("Worker %d: [%s] %s\n", w->id, names[i], buf);
+      pool_broadcast(/*fds[i].fd,*/ names[i], buf);
     }
+
   }
 
   for (int i = 0; i < nfds; i++) {
     shutdown(fds[i].fd, SHUT_RDWR);
+    close(fds[i].fd);
     free(names[i]);
   }
 
-  free(names);
   free(fds);
+  free(names);
+
   return NULL;
 }
 
@@ -335,7 +406,7 @@ int main(int argc, char **argv) {
 
   int sockfd, yes = 1;
   struct addrinfo hints, *res, *res0;
-  
+
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
@@ -392,29 +463,44 @@ int main(int argc, char **argv) {
     if (!strcmp("--thread-pool", argv[1]) || !strcmp("-p", argv[1])) {
       fprintf(stdout, "Server running in threading pool mode...\n");
 
-      pthread_t threads[5];
+      pthread_t threads[POOL_SIZE];
       pthread_attr_t attr;
       pthread_attr_init(&attr);
       pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-      /* Steps for threads
-        * 1. Create five threads
-        * 2. Each thread accepts a certain number of connections
-        * 3. Each thread adds each accepted fd to a list of fds
-        * 4. Each thread uses I/O multiplexing to handle input from connections
-        * 5. Whenever a client sends input, the server sends their input to all clients
-        *    (including the original sender)
-       */
       if (pthread_mutex_init(&mutex_lock, NULL)) {
         fprintf(stderr, "Could not create mutex lock.\n");
         exit(3);
       }
 
-      for (int i = 0; i < 5; i++) {
-        if (pthread_create(&threads[i], &attr, &pool_thread, (void *) (intptr_t) sockfd) != 0) {
-          fprintf(stderr, "Pool thread could not be created.\n");
-          continue;
+      for (int i = 0; i < POOL_SIZE; i++) {
+        workers[i].id = i;
+        queue_init(&workers[i].queue);
+
+        if (pthread_create(&threads[i], &attr, pool_thread, &workers[i]) != 0) {
+          perror("pthread_create");
+          exit(1);
         }
+      }
+
+      int next = 0;
+      struct sockaddr_storage client_addr;
+      socklen_t addr_size = sizeof(client_addr);
+      char s[INET6_ADDRSTRLEN];
+
+      while (1) {
+        int clientfd = accept(sockfd, (struct sockaddr *) &client_addr, &addr_size);
+        if (clientfd < 0) {
+          if (errno == EINTR) continue;
+          perror("accept");
+        }
+
+        inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *) &client_addr), s, sizeof(s));
+        printf("Connection from %s to worker %d\n", s, next);
+        fflush(stdout);
+
+        queue_push(&workers[next].queue, clientfd);
+        next = (next + 1) % POOL_SIZE;
       }
 
       if (pthread_mutex_destroy(&mutex_lock) != 0) {
@@ -451,6 +537,21 @@ int main(int argc, char **argv) {
       printf("Server got connection from %s\n", s);
       fflush(stdout);
 
+      /* Ask for the new user's name */
+      send(clientfd, "Enter your name:\n", 17, 0);
+      char name[BUF_SIZE] = {0};
+      char c;
+      int bytes_received, i = 0;
+      while ((bytes_received = recv(clientfd, &c, 1, 0)) > 0) {
+        name[i++] = c;
+        if (c == '\n') break;
+      }
+      if (bytes_received <= 0) {
+        close(clientfd);
+        continue;
+      }
+      name[strcspn(name, "\r\n")] = 0;
+
       pthread_t thread;
       pthread_attr_t attr;
       pthread_attr_init(&attr);
@@ -458,7 +559,7 @@ int main(int argc, char **argv) {
 
       client_info_default_mode *arg = (client_info_default_mode *) malloc(sizeof(client_info_default_mode));
       arg->fd = clientfd;
-      arg->name = strdup(s);
+      arg->name = strdup(name);
       int ret = pthread_create(&thread, &attr, &client_thread, arg);
       if (ret != 0) {
         fprintf(stderr, "Client thread could not be created.\n");

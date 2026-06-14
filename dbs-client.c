@@ -21,6 +21,7 @@
 
 #define PORT "50000"
 #define MAXDATASIZE 1024
+#define NAMESIZE 32
 
 volatile bool quit_flag = false;
 
@@ -150,6 +151,31 @@ int main(int argc, char *argv[]) {
 
   /* Clears terminal window */
   fprintf(stdout, "\e[1;1H\e[2J");
+
+  /* Receive the prompt from the server */
+  char prompt[MAXDATASIZE] = {0}, c;
+  int i = 0, bytes_received;
+  while ((bytes_received = recv(sockfd, &c, 1, 0)) > 0) {
+    prompt[i++] = c;
+    if (c == '\n') break;
+  }
+  if (bytes_received <= 0) {
+    fprintf(stderr, "Server disconnected.\n");
+    close(sockfd);
+    return EXIT_FAILURE;
+  }
+  prompt[strcspn(prompt, "\r\n")] = 0;
+
+  fprintf(stdout, "%s ", prompt);
+  fflush(stdout);
+
+  char name[NAMESIZE] = {0};
+  fgets(name, NAMESIZE, stdin);
+  name[strcspn(name, "\r\n")] = 0;
+
+  char msg[NAMESIZE + 1] = {0};
+  snprintf(msg, sizeof(msg), "%s\n", name);
+  send(sockfd, msg, strlen(msg), 0);
 
   pthread_t send_thread, recv_thread;
   void *arg = (void *) (intptr_t) sockfd;
