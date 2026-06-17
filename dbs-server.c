@@ -22,7 +22,7 @@
 #include <unistd.h>
 
 #define PORT "50000"
-#define BACKLOG 2
+#define BACKLOG 10
 #define BUF_SIZE 1024
 #define POOL_SIZE 5
 #define NAMESIZE 32
