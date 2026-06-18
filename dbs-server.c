@@ -164,7 +164,7 @@ void broadcast(const char *sender, const char *msg) {
   pthread_mutex_lock(&mutex_lock);
   for (int i = 0; i < BACKLOG; i++) {
     if (client_fds[i] != -1) {
-      if (send(client_fds[i], buf, strlen(buf), 0) < 0) {
+      if (send(client_fds[i], buf, strlen(buf), MSG_DONTWAIT) < 0) {
         perror("send");
       }
     }
