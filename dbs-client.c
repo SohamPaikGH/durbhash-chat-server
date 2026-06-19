@@ -34,7 +34,7 @@ void *get_in_addr(struct sockaddr *sa) {
 
 void *handle_send_thread(void *arg) {
   int sockfd = (intptr_t) arg;
-  char msg[MAXDATASIZE];
+  char msg[MAXDATASIZE] = {0};
 
   while (1) {
     if (quit_flag) break;

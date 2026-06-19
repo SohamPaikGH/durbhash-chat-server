@@ -29,6 +29,7 @@
 #define TIMEOUT 1000
 
 pthread_mutex_t mutex_lock;
+pthread_mutex_t names_lock;
 
 typedef struct client_info_default_mode {
   char *name;
@@ -37,6 +38,12 @@ typedef struct client_info_default_mode {
 
 int client_fds[BACKLOG];
 
+char **all_names;
+
+int name_count = 0;
+
+int max_names = BACKLOG;
+
 /* ----------- FUNCTION PROTOTYPES ----------- */
 
 int client_add(int);
@@ -44,6 +51,10 @@ int client_add(int);
 void client_remove(int);
 
 void *client_thread(void *);
+
+int is_name_taken(const char *name);
+
+void name_release(const char *name);
 
 void handle_client(int, const char *);
 
@@ -141,6 +152,40 @@ int queue_pop(FdQueue *q) {
 }
 
 /* ----------- HELPER FUNCTIONS ----------- */
+
+int is_name_taken(const char *name) {
+  if (!name) {
+    return -1;
+  }
+
+  pthread_mutex_lock(&names_lock);
+  int found = 0;
+  for (int i = 0; i < name_count; i++) {
+    if (!strncmp(name, all_names[i], strlen(all_names[i]))) {
+      found = 1;
+      break;
+    }
+  }
+  pthread_mutex_unlock(&names_lock);
+
+  return found;
+}
+
+void name_release(const char *name) {
+  if (!name) return;
+
+  pthread_mutex_lock(&names_lock);
+  for (int i = 0; i < name_count; i++) {
+    if (!strcmp(name, all_names[i])) {
+      free(all_names[i]);
+      all_names[i] = all_names[name_count - 1];
+      all_names[name_count - 1] = NULL;
+      name_count--;
+      break;
+    }
+  }
+  pthread_mutex_unlock(&names_lock);
+}
 
 void help() {
   fprintf(stdout, "Durbhasha - TCP Communications Server\n"
@@ -341,7 +386,29 @@ void *pool_thread(void *arg) {
       if (buf[0] == 0) continue;
 
       if (!names[i]) {
+        if (is_name_taken(buf)) {
+          char *msg = "That name already exists!\n";
+          send(fds[i].fd, msg, strlen(msg), MSG_DONTWAIT);
+          shutdown(fds[i].fd, SHUT_RDWR);
+          close(fds[i].fd);
+          free(names[i]);
+
+          fds[i] = fds[nfds - 1];
+          names[i] = names[nfds - 1];
+          fds[nfds - 1].fd = -1;
+          names[nfds - 1] = NULL;
+          nfds--;
+          i--;
+          continue;
+        }
+
+        if (name_count == max_names) {
+            max_names *= 2;
+            all_names = realloc(all_names, sizeof(all_names) * 2);
+        }
+        all_names[name_count++] = strdup(buf);
         names[i] = strdup(buf);
+
         char welcome[BUF_SIZE];
         snprintf(welcome, sizeof(welcome), "Welcome, %s!\n", buf);
         send(fds[i].fd, welcome, sizeof(welcome), 0);
@@ -353,10 +420,13 @@ void *pool_thread(void *arg) {
         send(fds[i].fd, "Goodbye!\n", 9, 0);
         printf("Worker %d: [%s] quit\n", w->id, names[i]);
 
+        name_release(names[i]);
+
         pool_client_remove(fds[i].fd);
         shutdown(fds[i].fd, SHUT_RDWR);
         close(fds[i].fd);
         free(names[i]);
+
 
         fds[i] = fds[nfds - 1];
         names[i] = names[nfds - 1];
@@ -392,6 +462,7 @@ void *pool_thread(void *arg) {
 int main(int argc, char **argv) {
   memset(&client_fds, -1, sizeof(client_fds));
   memset(&pool_clients, -1, sizeof(pool_clients));
+  all_names = (char **) malloc(sizeof(char *) * BACKLOG);
 
   struct sigaction sa_pipe;
   memset(&sa_pipe, 0, sizeof(sa_pipe));
@@ -538,10 +609,10 @@ int main(int argc, char **argv) {
 
       /* Ask for the new user's name */
       send(clientfd, "Enter your name:\n", 17, 0);
-      char name[BUF_SIZE] = {0};
+      char name[NAMESIZE] = {0};
       char c;
       int bytes_received, i = 0;
-      while ((bytes_received = recv(clientfd, &c, 1, 0)) > 0) {
+      while ((bytes_received = recv(clientfd, &c, 1, 0)) > 0 && i < NAMESIZE)  {
         name[i++] = c;
         if (c == '\n') break;
       }
@@ -551,6 +622,13 @@ int main(int argc, char **argv) {
       }
       name[strcspn(name, "\r\n")] = 0;
 
+      if (is_name_taken(name)) {
+        char *msg = "That name already exists!\n";
+        send(clientfd, msg, strlen(msg), MSG_DONTWAIT);
+        close(clientfd);
+        continue;
+      }
+
       pthread_t thread;
       pthread_attr_t attr;
       pthread_attr_init(&attr);
@@ -559,6 +637,11 @@ int main(int argc, char **argv) {
       client_info_default_mode *arg = (client_info_default_mode *) malloc(sizeof(client_info_default_mode));
       arg->fd = clientfd;
       arg->name = strdup(name);
+      all_names[name_count++] = strdup(name);
+      if (name_count == max_names) {
+        max_names *= 2;
+        all_names = realloc(all_names, sizeof(all_names) * max_names);
+      }
       int ret = pthread_create(&thread, &attr, &client_thread, arg);
       if (ret != 0) {
         fprintf(stderr, "Client thread could not be created.\n");
