@@ -415,7 +415,7 @@ void *pool_thread(void *arg) {
 
         char welcome[BUF_SIZE];
         snprintf(welcome, sizeof(welcome), "Welcome, %s!\n", buf);
-        send(fds[i].fd, welcome, sizeof(welcome), 0);
+        send(fds[i].fd, welcome, strlen(welcome), 0);
         printf("Worker %d: fd=%d registered as '%s'\n", w->id, fds[i].fd, buf);
         continue;
       }
