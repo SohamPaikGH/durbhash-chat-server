@@ -1,5 +1,5 @@
 /*
- * dbs-server.c: Durbhasha Communications Server
+ * dbs-server.c: Durbhash Communications Server
  *
  * Author: Soham Paik
  * Purpose: This program utilizes the TCP protocol and the C POSIX Threading
