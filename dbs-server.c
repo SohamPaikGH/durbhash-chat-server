@@ -283,6 +283,7 @@ void *client_thread(void *arg) {
   int idx = client_add(c->fd);
   if (idx == -1) {
     fprintf(stdout, "Server full.\n");
+    name_release(c->name);
     send(c->fd, "Server full.", 12, 0);
     shutdown(c->fd, SHUT_RDWR);
     close(c->fd);
@@ -291,6 +292,7 @@ void *client_thread(void *arg) {
     return NULL;
   }
   handle_client(c->fd, c->name);
+  name_release(c->name);
   shutdown(c->fd, SHUT_RDWR);
   close(c->fd);
   client_remove(idx);
@@ -372,6 +374,8 @@ void *pool_thread(void *arg) {
         shutdown(fds[i].fd, SHUT_RDWR);
         close(fds[i].fd);
         free(names[i]);
+
+        name_release(names[i]);
 
         fds[i] = fds[nfds - 1];
         names[i] = names[nfds - 1];
