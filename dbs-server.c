@@ -243,7 +243,7 @@ void handle_client(int clientfd, const char *s) {
     }
 
     fflush(stdout);
-    if (!strncmp(buf, "quit", 4)) {
+    if (!strcmp(buf, "quit")) {
       send(clientfd, "Goodbye!\n", 9, 0);
       send(clientfd, "\n", 1, 0);
       printf("Client %s disconnected.\n", s);
@@ -420,7 +420,7 @@ void *pool_thread(void *arg) {
         continue;
       }
 
-      if (!strncmp(buf, "quit", 4)) {
+      if (!strcmp(buf, "quit")) {
         send(fds[i].fd, "Goodbye!\n", 9, 0);
         printf("Worker %d: [%s] quit\n", w->id, names[i]);
 
