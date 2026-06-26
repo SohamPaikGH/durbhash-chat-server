@@ -1,0 +1,5 @@
+1. Latency/Response Time
+2. Throughput
+3. Number of concurrent connections
+4. CPU/Disk utilization
+5. Heap/memory profiling

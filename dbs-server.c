@@ -6,7 +6,7 @@
  *          library to receive messages from users and broadcast them to all other
  *          users. It serves as a server for hosting a messaging server.
  */
-#define _POSIX_C_SOURCE 200809L // Requests C extensions from POSIX.1-2008, which is needed to compile on Linux
+#define _GNU_SOURCE // Gets C extensions for Linux from _GNU_SOURCE, which is needed to compile on Linux
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
@@ -433,7 +433,7 @@ void *pool_thread(void *arg) {
         names[i] = strdup(buf);
 
         char welcome[BUF_SIZE];
-        snprintf(welcome, sizeof(welcome), "Welcome, %s!\n", buf);
+        snprintf(welcome, sizeof(welcome), "Welcome, %*s!\n", BUF_SIZE - 11, buf);
         send(fds[i].fd, welcome, strlen(welcome), 0);
         printf("Worker %d: fd=%d registered as '%s'\n", w->id, fds[i].fd, buf);
         continue;
