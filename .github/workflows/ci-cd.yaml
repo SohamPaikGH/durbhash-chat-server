@@ -1,0 +1,26 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source context
+      uses: actions/checkout@v7
+
+    - name: Install System Dependencies
+      run: |
+          sudo apt-get update
+          sudo apt-get install -y make gcc
+
+    - name: Build
+      run: make
+
+    - name: Check for warnings
+      run: make clean && make 2>&1 | grep -i warning && exit 1 || exit 0
