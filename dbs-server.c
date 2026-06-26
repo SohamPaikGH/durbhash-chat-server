@@ -206,26 +206,42 @@ void broadcast(const char *sender, const char *msg) {
   char buf[BUF_SIZE];
   snprintf(buf, sizeof(buf), "[%s] says \'%s\'\n", sender, msg);
 
+  int snapshot[BACKLOG];
+  int count = 0;
+
   pthread_mutex_lock(&mutex_lock);
   for (int i = 0; i < BACKLOG; i++) {
     if (client_fds[i] != -1) {
-      if (send(client_fds[i], buf, strlen(buf), MSG_DONTWAIT) < 0) {
-        perror("send");
-      }
+      snapshot[count++] = client_fds[i];
     }
   }
   pthread_mutex_unlock(&mutex_lock);
+
+  for (int i = 0; i < count; i++) {
+    if (send(snapshot[i], buf, strlen(buf), MSG_DONTWAIT) < 0) {
+      if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        fprintf(stdout, "DEBUG: error sending to fd=%d\n", snapshot[i]);
+        fflush(stdout);
+        perror("send");
+      }
+    }
+    fprintf(stdout, "DEBUG: sending to fd=%d\n", snapshot[i]);
+    fflush(stdout);
+  }
 }
 
 void handle_client(int clientfd, const char *s) {
   char buf[BUF_SIZE];
 
   while (1) {
+    puts("Entering iteration");
     memset(buf, 0, BUF_SIZE);
     char c;
     int i = 0;
     ssize_t bytes = 0;
     while ((bytes = recv(clientfd, &c, 1, 0)) > 0) {
+      if (i == 0)
+        puts("HIT");
       if (c == '\n') {
         buf[i] = 0;
         break;
@@ -279,6 +295,7 @@ void client_remove(int idx) {
 }
 
 void *client_thread(void *arg) {
+  puts("Creating thread");
   client_info_default_mode *c = (client_info_default_mode *) arg;
   int idx = client_add(c->fd);
   if (idx == -1) {
