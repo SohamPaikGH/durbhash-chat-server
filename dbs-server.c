@@ -6,6 +6,7 @@
  *          library to receive messages from users and broadcast them to all other
  *          users. It serves as a server for hosting a messaging server.
  */
+#define _POSIX_C_SOURCE 200809L // Requests C extensions from POSIX.1-2008, which is needed to compile on Linux
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
