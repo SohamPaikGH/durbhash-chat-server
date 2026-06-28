@@ -16,4 +16,4 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Makefile and GCC compiler
-      - uses: sudo apt install make gcc
+      - run: sudo apt install make gcc
