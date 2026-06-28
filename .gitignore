@@ -1,5 +1,4 @@
 dbs-client
 dbs-server
-benchmark
-benchmark_client.c
-benchmark-metrics.txt
+dbs-client.dSYM
+dbs-server.dSYM
