@@ -153,7 +153,6 @@ int main(int argc, char *argv[]) {
   freeaddrinfo(res);
 
   /* Clears terminal window */
-  // fprintf(stdout, "\e[1;1H\e[2J");
   fprintf(stdout, "\033[2J\033[1;1H");
 
   /* Receive the prompt from the server */
