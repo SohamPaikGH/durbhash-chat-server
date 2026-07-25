@@ -6,7 +6,6 @@
  *          library to receive messages from users and broadcast them to all other
  *          users. It serves as a server for hosting a messaging server.
  */
-#define _GNU_SOURCE // Gets C extensions for Linux from _GNU_SOURCE, which is needed to compile on Linux
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
@@ -61,7 +60,7 @@ void handle_client(int, const char *);
 
 void broadcast(const char *, const char *);
 
-void help();
+void help(void);
 
 /* ----------- POOL MODE QUEUE ----------- */
 
@@ -188,7 +187,7 @@ void name_release(const char *name) {
   pthread_mutex_unlock(&names_lock);
 }
 
-void help() {
+void help(void) {
   fprintf(stdout, "Durbhasha - TCP Communications Server\n"
           "\nUsage: dbs-server [arguments]\n"
           "\nArguments:\n\t-ts\t\tThread pool mode\n\t--thread-pool\t\tThread pool mode\n");
