@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-g -Wall -Werror -Wextra -std=c17
+CFLAGS=-g -Wall -Werror -Wextra -std=gnu17
 
 SERVER=dbs-server
 CLIENT=dbs-client
