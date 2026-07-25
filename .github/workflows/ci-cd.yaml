@@ -20,7 +20,7 @@ jobs:
         run: sudo apt install make gcc
 
       - name: Compile
-        run: make
+        run: gcc -g -Wall -Werror -Wextra -std=gnu17
 
       - name: Run TCP server
         run: ./dbs-server -p
