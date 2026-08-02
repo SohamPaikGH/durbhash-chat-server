@@ -26,7 +26,7 @@
 #define BUF_SIZE 1024
 #define POOL_SIZE 5
 #define NAMESIZE 32
-#define TIMEOUT 1000
+#define TIMEOUT 0
 
 pthread_mutex_t mutex_lock;
 pthread_mutex_t names_lock;
