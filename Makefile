@@ -1,5 +1,5 @@
-CC=gcc
-CFLAGS=-g -Wall -Werror -Wextra -std=gnu17 -pedantic
+CC=g++
+CFLAGS=-g -Wall -Werror -Wextra -std=gnu++20 -pedantic
 
 SERVER=dbs-server
 CLIENT=dbs-client
@@ -8,8 +8,8 @@ MSG?="Commit"
 
 all: $(SERVER) $(CLIENT)
 
-$(SERVER): dbs-server.c
-	$(CC) $(CFLAGS) -o $(SERVER) dbs-server.c
+$(SERVER): dbs-server.cpp
+	$(CC) $(CFLAGS) -o $(SERVER) dbs-server.cpp
 
 $(CLIENT): dbs-client.c
 	$(CC) $(CFLAGS) -o $(CLIENT) dbs-client.c

@@ -21,6 +21,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <string>
+#include <vector>
+
 #define PORT "50000"
 #define BACKLOG 1024
 #define BUF_SIZE 1024
@@ -324,8 +327,8 @@ void *pool_thread(void *arg) {
   Worker *w = (Worker *) arg;
 
   int maxfds = BACKLOG;
-  struct pollfd *fds = malloc(sizeof(struct pollfd) * maxfds);
-  char **names = malloc(sizeof(char *) * maxfds);
+  struct pollfd *fds = (struct pollfd *) malloc(sizeof(struct pollfd) * maxfds);
+  char **names = (char **) malloc(sizeof(char *) * maxfds);
   int nfds = 0;
 
 
@@ -342,8 +345,8 @@ void *pool_thread(void *arg) {
     while ((new_fd = queue_pop(&w->queue)) != -1) {
       if (nfds == maxfds) {
         maxfds *= 2;
-        fds = realloc(fds, sizeof(struct pollfd) * maxfds);
-        names = realloc(names, sizeof(char *) * maxfds);
+        fds = (struct pollfd *) realloc(fds, sizeof(struct pollfd) * maxfds);
+        names = (char **) realloc(names, sizeof(char *) * maxfds);
       }
 
       fds[nfds].fd = new_fd;
@@ -408,7 +411,7 @@ void *pool_thread(void *arg) {
 
       if (!names[i]) {
         if (is_name_taken(buf)) {
-          char *msg = "That name already exists!\n";
+          const char *msg = "That name already exists!\n";
           send(fds[i].fd, msg, strlen(msg), MSG_DONTWAIT);
           pool_client_remove(fds[i].fd);
           shutdown(fds[i].fd, SHUT_RDWR);
@@ -426,7 +429,7 @@ void *pool_thread(void *arg) {
 
         if (name_count == max_names) {
             max_names *= 2;
-            all_names = realloc(all_names, sizeof(all_names) * 2);
+            all_names = (char **) realloc(all_names, sizeof(all_names) * 2);
         }
         all_names[name_count++] = strdup(buf);
         names[i] = strdup(buf);
@@ -645,7 +648,7 @@ int main(int argc, char **argv) {
       name[strcspn(name, "\r\n")] = 0;
 
       if (is_name_taken(name)) {
-        char *msg = "That name already exists!\n";
+        const char *msg = "That name already exists!\n";
         send(clientfd, msg, strlen(msg), MSG_DONTWAIT);
         close(clientfd);
         continue;
@@ -662,7 +665,7 @@ int main(int argc, char **argv) {
       all_names[name_count++] = strdup(name);
       if (name_count == max_names) {
         max_names *= 2;
-        all_names = realloc(all_names, sizeof(all_names) * max_names);
+        all_names = (char **) realloc(all_names, sizeof(all_names) * max_names);
       }
       int ret = pthread_create(&thread, &attr, &client_thread, arg);
       if (ret != 0) {
