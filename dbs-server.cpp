@@ -39,7 +39,7 @@ typedef struct client_info_default_mode {
   int fd;
 } client_info_default_mode;
 
-int client_fds[BACKLOG];
+std::vector<int> client_fds(BACKLOG, -1);
 
 char **all_names;
 
@@ -485,7 +485,6 @@ void *pool_thread(void *arg) {
 /* ----------- MAIN ----------- */
 
 int main(int argc, char **argv) {
-  memset(&client_fds, -1, sizeof(client_fds));
   memset(&pool_clients, -1, sizeof(pool_clients));
   all_names = (char **) malloc(sizeof(char *) * BACKLOG);
 
