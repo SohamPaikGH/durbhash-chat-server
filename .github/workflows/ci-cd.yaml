@@ -21,6 +21,3 @@ jobs:
 
       - name: Compile
         run: make
-
-      - name: Run TCP server
-        run: ./dbs-server -p

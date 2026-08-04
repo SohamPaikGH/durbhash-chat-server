@@ -41,7 +41,7 @@ typedef struct client_info_default_mode {
 
 std::vector<int> client_fds(BACKLOG, -1);
 
-char **all_names;
+std::vector<std::string> all_names;
 
 int name_count = 0;
 
@@ -164,7 +164,7 @@ int is_name_taken(const char *name) {
   pthread_mutex_lock(&names_lock);
   int found = 0;
   for (int i = 0; i < name_count; i++) {
-    if (!strncmp(name, all_names[i], strlen(all_names[i]))) {
+    if (!strncmp(name, all_names[i].c_str(), all_names[i].size())) {
       found = 1;
       break;
     }
@@ -179,10 +179,9 @@ void name_release(const char *name) {
 
   pthread_mutex_lock(&names_lock);
   for (int i = 0; i < name_count; i++) {
-    if (!strcmp(name, all_names[i])) {
-      free(all_names[i]);
+    if (!strcmp(name, all_names[i].c_str())) {
       all_names[i] = all_names[name_count - 1];
-      all_names[name_count - 1] = NULL;
+      all_names[name_count - 1].clear();
       name_count--;
       break;
     }
@@ -427,11 +426,8 @@ void *pool_thread(void *arg) {
           continue;
         }
 
-        if (name_count == max_names) {
-            max_names *= 2;
-            all_names = (char **) realloc(all_names, sizeof(all_names) * 2);
-        }
-        all_names[name_count++] = strdup(buf);
+        all_names.push_back(buf);
+        name_count++;
         names[i] = strdup(buf);
 
         char welcome[BUF_SIZE];
@@ -486,7 +482,6 @@ void *pool_thread(void *arg) {
 
 int main(int argc, char **argv) {
   memset(&pool_clients, -1, sizeof(pool_clients));
-  all_names = (char **) malloc(sizeof(char *) * BACKLOG);
 
   struct sigaction sa_pipe;
   memset(&sa_pipe, 0, sizeof(sa_pipe));
@@ -661,11 +656,7 @@ int main(int argc, char **argv) {
       client_info_default_mode *arg = (client_info_default_mode *) malloc(sizeof(client_info_default_mode));
       arg->fd = clientfd;
       arg->name = strdup(name);
-      all_names[name_count++] = strdup(name);
-      if (name_count == max_names) {
-        max_names *= 2;
-        all_names = (char **) realloc(all_names, sizeof(all_names) * max_names);
-      }
+      all_names.push_back(name);
       int ret = pthread_create(&thread, &attr, &client_thread, arg);
       if (ret != 0) {
         fprintf(stderr, "Client thread could not be created.\n");
