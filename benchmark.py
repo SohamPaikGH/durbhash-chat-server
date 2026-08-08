@@ -12,21 +12,16 @@ def connect(client_id: int):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # s.settimeout(5)
     try:
-        # print(f"Attempting to connect as {client_id}...")
         s.connect((HOST, PORT))
-        # print(f"{client_id} has connected!")
         while True:
             data = s.recv(1024)
             if data:
                 break
-        # print(f"{client_id} received \'{data}\'!")
         name_msg = f"{client_id}\n".encode()
-        # print(f"{client_id} sent \'{name_msg}\'!")
         s.send(name_msg)
         data = s.recv(1024)
         while data:
             data = s.recv(1024)
-            # print(client_id, ":", data)
     except Exception as e:
         print(e)
     finally:

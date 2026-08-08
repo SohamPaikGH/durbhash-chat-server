@@ -83,7 +83,8 @@ Worker workers[POOL_SIZE];
 
 /* --- SHARED BROADCAST FOR POOL MODE ----- */
 
-int pool_clients[POOL_SIZE * BACKLOG];
+// int pool_clients[POOL_SIZE * BACKLOG];
+std::vector<int> pool_clients(POOL_SIZE * BACKLOG, -1);
 pthread_mutex_t pool_clients_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int pool_client_add(int fd) {
@@ -326,15 +327,9 @@ void *pool_thread(void *arg) {
   Worker *w = (Worker *) arg;
 
   int maxfds = BACKLOG;
-  struct pollfd *fds = (struct pollfd *) malloc(sizeof(struct pollfd) * maxfds);
-  char **names = (char **) malloc(sizeof(char *) * maxfds);
+  std::vector<struct pollfd> fds(sizeof(struct pollfd) * maxfds);
+  std::vector<std::string> names(maxfds, "");
   int nfds = 0;
-
-
-  for (int i = 0; i < maxfds; i++) {
-    fds[i].fd = -1;
-    names[i] = NULL;
-  }
 
   printf("Worker %d started\n", w->id);
 
@@ -342,16 +337,10 @@ void *pool_thread(void *arg) {
     int new_fd;
 
     while ((new_fd = queue_pop(&w->queue)) != -1) {
-      if (nfds == maxfds) {
-        maxfds *= 2;
-        fds = (struct pollfd *) realloc(fds, sizeof(struct pollfd) * maxfds);
-        names = (char **) realloc(names, sizeof(char *) * maxfds);
-      }
-
       fds[nfds].fd = new_fd;
       fds[nfds].events = POLLIN;
       fds[nfds].revents = 0;
-      names[nfds] = NULL;
+      names[nfds].clear();
       nfds++;
 
       pool_client_add(new_fd);
@@ -369,7 +358,7 @@ void *pool_thread(void *arg) {
       continue;
     }
 
-    int ready = poll(fds, nfds, TIMEOUT);
+    int ready = poll(fds.data(), nfds, TIMEOUT);
     if (ready < 0) {
       if (errno == EINTR) continue;
       perror("poll");
@@ -392,14 +381,13 @@ void *pool_thread(void *arg) {
         pool_client_remove(fds[i].fd);
         shutdown(fds[i].fd, SHUT_RDWR);
         close(fds[i].fd);
-        free(names[i]);
 
-        name_release(names[i]);
+        name_release(names[i].c_str());
 
         fds[i] = fds[nfds - 1];
         names[i] = names[nfds - 1];
         fds[nfds - 1].fd = -1;
-        names[nfds - 1] = NULL;
+        names.clear();
         nfds--;
         i--;
         continue;
@@ -408,19 +396,18 @@ void *pool_thread(void *arg) {
       buf[strcspn(buf, "\r\n")] = 0;
       if (buf[0] == 0) continue;
 
-      if (!names[i]) {
+      if (names[i].empty()) {
         if (is_name_taken(buf)) {
           const char *msg = "That name already exists!\n";
           send(fds[i].fd, msg, strlen(msg), MSG_DONTWAIT);
           pool_client_remove(fds[i].fd);
           shutdown(fds[i].fd, SHUT_RDWR);
           close(fds[i].fd);
-          free(names[i]);
 
           fds[i] = fds[nfds - 1];
           names[i] = names[nfds - 1];
           fds[nfds - 1].fd = -1;
-          names[nfds - 1] = NULL;
+          names[nfds - 1].clear();
           nfds--;
           i--;
           continue;
@@ -428,7 +415,7 @@ void *pool_thread(void *arg) {
 
         all_names.push_back(buf);
         name_count++;
-        names[i] = strdup(buf);
+        names[i] = buf;
 
         char welcome[BUF_SIZE];
         snprintf(welcome, sizeof(welcome), "Welcome, %.32s!\n", buf);
@@ -439,29 +426,29 @@ void *pool_thread(void *arg) {
 
       if (!strcmp(buf, "quit")) {
         send(fds[i].fd, "Goodbye!\n", 9, 0);
-        printf("Worker %d: [%s] quit\n", w->id, names[i]);
+        printf("Worker %d: [%s] quit\n", w->id, names[i].c_str());
 
-        name_release(names[i]);
+        name_release(names[i].c_str());
 
         pool_client_remove(fds[i].fd);
         shutdown(fds[i].fd, SHUT_RDWR);
         close(fds[i].fd);
-        free(names[i]);
+        names[i].clear();
 
 
         fds[i] = fds[nfds - 1];
         names[i] = names[nfds - 1];
         fds[nfds - 1].fd = -1;
-        names[nfds - 1] = NULL;
+        names[nfds - 1].clear();
         nfds--;
         i--;
         continue;
       }
 
 
-      printf("Worker %d: [%s] %s\n", w->id, names[i], buf);
+      printf("Worker %d: [%s] %s\n", w->id, names[i].c_str(), buf);
       buf[strcspn(buf, "\r\n")] = 0;
-      pool_broadcast(names[i], buf);
+      pool_broadcast(names[i].c_str(), buf);
     }
 
   }
@@ -469,11 +456,8 @@ void *pool_thread(void *arg) {
   for (int i = 0; i < nfds; i++) {
     shutdown(fds[i].fd, SHUT_RDWR);
     close(fds[i].fd);
-    free(names[i]);
+    names[i].clear();
   }
-
-  free(fds);
-  free(names);
 
   return NULL;
 }
@@ -481,8 +465,6 @@ void *pool_thread(void *arg) {
 /* ----------- MAIN ----------- */
 
 int main(int argc, char **argv) {
-  memset(&pool_clients, -1, sizeof(pool_clients));
-
   struct sigaction sa_pipe;
   memset(&sa_pipe, 0, sizeof(sa_pipe));
   sa_pipe.sa_handler = SIG_IGN;
