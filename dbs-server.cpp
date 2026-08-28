@@ -83,7 +83,6 @@ Worker workers[POOL_SIZE];
 
 /* --- SHARED BROADCAST FOR POOL MODE ----- */
 
-// int pool_clients[POOL_SIZE * BACKLOG];
 std::vector<int> pool_clients(POOL_SIZE * BACKLOG, -1);
 pthread_mutex_t pool_clients_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -308,7 +307,9 @@ void *client_thread(void *arg) {
     shutdown(c->fd, SHUT_RDWR);
     close(c->fd);
     free(c->name);
+    c->name = NULL;
     free(c);
+    c = NULL;
     return NULL;
   }
   handle_client(c->fd, c->name);
@@ -317,7 +318,9 @@ void *client_thread(void *arg) {
   close(c->fd);
   client_remove(idx);
   free(c->name);
+  c->name = NULL;
   free(c);
+  c = NULL;
   return NULL;
 }
 
@@ -445,7 +448,6 @@ void *pool_thread(void *arg) {
         continue;
       }
 
-
       printf("Worker %d: [%s] %s\n", w->id, names[i].c_str(), buf);
       buf[strcspn(buf, "\r\n")] = 0;
       pool_broadcast(names[i].c_str(), buf);
@@ -532,6 +534,7 @@ int main(int argc, char **argv) {
 
   if (argc > 1) {
     if (!strcmp("--thread-pool", argv[1]) || !strcmp("-p", argv[1])) {
+      /* THREAD POOL MODE */
       fprintf(stdout, "Server running in threading pool mode...\n");
 
       pthread_t threads[POOL_SIZE];
@@ -578,6 +581,36 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Mutex lock could not be destroyed.");
         exit(3);
       }
+
+    }
+    else if (!strcmp("--web-sockets", argv[1]) || !strcmp("-ws", argv[1])) {
+      /* WEB SOCKETS MODE */
+      fprintf(stdout, "Server running in WebSockets mode...");
+
+      pthread_t threads[POOL_SIZE];
+      pthread_attr_t attr;
+      pthread_attr_init(&attr);
+      pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+      if (pthread_mutex_init(&mutex_lock, NULL)) {
+        fprintf(stderr, "Could not create mutex lock.\n");
+        exit(3);
+      }
+
+      for (int i = 0; i < POOL_SIZE; i++) {
+        workers[i].id = i;
+        queue_init(&workers[i].queue);
+
+        if (pthread_create(&threads[i], &attr, pool_thread, &workers[i]) != 0) {
+          perror("pthread_create");
+          exit(1);
+        }
+      }
+
+      /*int next = 0;
+      struct sockaddr_storage client_addr;
+      socklen_t addr_size = sizeof(client_addr);
+      char s[INET6_ADDRSTRLEN];*/
 
     }
     else {
