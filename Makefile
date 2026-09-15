@@ -1,5 +1,5 @@
 CLANG=gcc
-CFLAGS=-g -Wall -Werror -Wextra -std=c17 -pedantic
+CFLAGS=-g -Wall -Werror -Wextra -std=gnu17 -pedantic
 CPP=g++
 CPPFLAGS=-g -Wall -Werror -Wextra -std=gnu++20 -pedantic
 
