@@ -1,11 +1,12 @@
-FROM alpine:latest AS builder
-RUN apk add --no-cache gcc g++ musl-dev make
+FROM --platform=linux/amd64 ubuntu:latest AS builder
+RUN apt-get update
+RUN apt-get install -y gcc g++ make
 WORKDIR /build
 COPY . .
 RUN make
 
-FROM scratch
+FROM --platform=linux/amd64 ubuntu:latest
 WORKDIR /app
-COPY --from=builder /build/dbs_server .
-COPY --from=builder /build/dbs_client .
-CMD ["./dbs_server"]
+COPY --from=builder /build/dbs-server .
+COPY --from=builder /build/dbs-client .
+CMD ["./dbs-server"]
