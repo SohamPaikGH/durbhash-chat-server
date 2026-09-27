@@ -390,7 +390,7 @@ void *worker_thread(void *arg) {
         fds[i] = fds[nfds - 1];
         names[i] = names[nfds - 1];
         fds[nfds - 1].fd = -1;
-        names.clear();
+        names[nfds - 1].clear();
         nfds--;
         i--;
         continue;
@@ -828,7 +828,12 @@ int main(int argc, char **argv) {
       client_info_default_mode *arg = (client_info_default_mode *) malloc(sizeof(client_info_default_mode));
       arg->fd = clientfd;
       arg->name = strdup(name);
+
+      pthread_mutex_lock(&names_lock);
       all_names.push_back(name);
+      name_count++;
+      pthread_mutex_unlock(&names_lock);
+
       int ret = pthread_create(&thread, &attr, &client_thread, arg);
       if (ret != 0) {
         fprintf(stderr, "Client thread could not be created.\n");
