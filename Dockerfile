@@ -5,7 +5,7 @@ WORKDIR /build
 COPY . .
 RUN make
 
-FROM --platform=linux/amd64 ubuntu:latest
+FROM --platform=linux/arm64 ubuntu:latest
 WORKDIR /app
 COPY --from=builder /build/dbs-server .
 COPY --from=builder /build/dbs-client .

@@ -673,6 +673,11 @@ int main(int argc, char **argv) {
     exit(3);
   }
 
+  if (pthread_mutex_init(&names_lock, NULL)) {
+    fprintf(stderr, "Could not create names lock.\n");
+    exit(3);
+  }
+
   if (argc > 1) {
     if (!strcmp("--thread-pool", argv[1]) || !strcmp("-p", argv[1])) {
       /* THREAD POOL MODE */
@@ -719,7 +724,12 @@ int main(int argc, char **argv) {
       }
 
       if (pthread_mutex_destroy(&mutex_lock) != 0) {
-        fprintf(stderr, "Mutex lock could not be destroyed.");
+        fprintf(stderr, "Mutex lock could not be destroyed.\n");
+        exit(3);
+      }
+
+      if (pthread_mutex_destroy(&names_lock) != 0) {
+        fprintf(stderr, "Names lock could not be destroyed.\n");
         exit(3);
       }
 
@@ -763,6 +773,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Mutex lock could not be destroyed.\n");
         exit(3);
       }
+
+      if (pthread_mutex_destroy(&names_lock)) {
+        fprintf(stderr, "Names lock could not be destroyed.\n");
+        exit(3);
+      }
+
       close(sockfd);
     }
   }
